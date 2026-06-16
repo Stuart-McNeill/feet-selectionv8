@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>3D Foot Analysis V4 - Local Diagnostic Sandbox</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #0a0a0c; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; touch-action: none; }
+        #ui-layer { display: none !important; }
+        
+        /* Interactive Testing HUD overlay */
+        #diagnostic-hud {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(20, 20, 24, 0.88);
+            border: 1px solid rgba(0, 212, 255, 0.2);
+            border-radius: 16px;
+            padding: 16px;
+            width: 320px;
+            z-index: 100;
+            color: #fff;
+            pointer-events: auto;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            backdrop-filter: blur(10px);
+        }
+        .hud-title { font-size: 11px; font-weight: 700; color: #00D4FF; letter-spacing: 1px; text-transform: uppercase; margin: 0 0 4px 0; }
+        .hud-value { font-size: 20px; font-weight: 800; color: #fff; margin: 0 0 12px 0; }
+        .data-label { font-size: 11px; font-weight: 600; color: #888; text-transform: uppercase; margin: 8px 0 2px 0; }
+        .data-value { font-size: 13px; color: #e5e5ea; background: rgba(255,255,255,0.04); padding: 6px 10px; border-radius: 8px; font-family: monospace; overflow-x: auto; white-space: nowrap; margin-bottom: 8px; border: 1px solid rgba(255,255,255,0.03); }
+        #pathology-list { font-size: 13px; color: #ff4d4d; padding-left: 18px; margin: 4px 0 0 0; }
+        #mode-indicator { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12); padding: 8px 18px; border-radius: 20px; color: #fff; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; z-index: 100; pointer-events: none; }
+        .mode-btn { background: #00D4FF; border: none; color: #000; font-weight: 700; padding: 8px 12px; border-radius: 8px; cursor: pointer; font-size: 12px; width: 100%; margin-top: 10px; display: block; text-align: center; text-decoration: none; }
+    </style>
+</head>
+<body>
+
+<div id="diagnostic-hud">
+    <p class="data-label">Selected Layer Tracking</p>
+    <div id="target-structure" style="font-size:16px; font-weight:700; color:#fff; margin-bottom:4px;">No Structure Selected</div>
+    <div id="target-type" style="font-size:11px; font-weight:700; color:#34c759; text-transform:uppercase;">READY</div>
+    
+    <p class="data-label">Raw Captured Vector</p>
+    <div id="vector-output" class="data-value">X: 0.000, Y: 0.000, Z: 0.000</div>
+    
+    <p class="data-label">Nearest Proximity Margin</p>
+    <div id="proximity-output" class="data-value">0.00 units</div>
+
+    <p class="data-label">Database Mapped Pathologies</p>
+    <ul id="pathology-list">
+        <li>Tap the foot mesh to query properties</li>
+    </ul>
+
+    <button id="toggle-mode-btn" class="mode-btn">SWITCH TO MARK MODE</button>
+</div>
+
+<div id="mode-indicator">Mode: Rotate View</div>
+
+<script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+    }
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+// --- INJECTED FULL COMPLETED ANATOMYTRACER DATA MATRIX ---
+const ANATOMY_TRACER_DATABASE = {
+  "metadata": { "project": "Clinical Foot Anatomy Engine", "version": "1.6" },
+  "anatomical_database": [
+    {
+      "id": "tibialis_anterior_l",
+      "label": "Left Tibialis Anterior Tendon",
+      "type": "pathway",
+      "coordinates": [
+        [-0.163, 0.160, 0.015], [-0.157, 0.182, -0.005], [-0.149, 0.204, -0.009], [-0.142, 0.226, -0.021], [-0.132, 0.249, -0.031], [-0.122, 0.270, -0.043], [-0.112, 0.294, -0.064], [-0.103, 0.318, -0.080], [-0.096, 0.342, -0.100], [-0.088, 0.365, -0.113], [-0.081, 0.395, -0.131], [-0.075, 0.420, -0.139], [-0.072, 0.446, -0.147], [-0.068, 0.476, -0.155], [-0.064, 0.502, -0.160], [-0.058, 0.530, -0.165], [-0.056, 0.558, -0.168], [-0.048, 0.583, -0.168], [-0.046, 0.611, -0.168], [-0.044, 0.643, -0.168], [-0.035, 0.685, -0.167], [-0.034, 0.712, -0.167], [-0.028, 0.743, -0.169]
+      ],
+      "clinical_profile": {
+        "description": "Primary dorsiflexor and invertor of the foot.",
+        "pathologies": ["Insertional Tendinopathy", "Anterior Ankle Impingement"],
+        "nerve": "Deep Peroneal Nerve (L4-L5)"
+      }
+    },
+    {
+      "id": "superior_extensor_retinaculum_l",
+      "label": "Left Superior Extensor Retinaculum",
+      "type": "retinaculum",
+      "coordinates": [
+        [-0.157, 0.372, -0.208], [-0.141, 0.375, -0.179], [-0.121, 0.377, -0.148], [-0.100, 0.381, -0.129], [-0.080, 0.380, -0.120], [-0.064, 0.378, -0.116], [-0.043, 0.378, -0.116], [-0.026, 0.372, -0.115], [-0.004, 0.367, -0.118], [0.011, 0.364, -0.123], [0.035, 0.354, -0.144], [0.029, 0.355, -0.133], [0.051, 0.340, -0.169], [0.065, 0.329, -0.196], [0.077, 0.319, -0.219], [0.090, 0.314, -0.250], [0.087, 0.342, -0.254], [0.086, 0.364, -0.260], [0.086, 0.381, -0.269], [0.081, 0.397, -0.263], [0.079, 0.418, -0.270], [0.076, 0.440, -0.269], [0.061, 0.451, -0.229], [0.038, 0.464, -0.191], [0.015, 0.470, -0.168], [-0.008, 0.473, -0.157], [-0.029, 0.476, -0.154], [-0.050, 0.477, -0.153], [-0.073, 0.479, -0.157], [-0.095, 0.481, -0.166], [-0.111, 0.479, -0.176], [-0.132, 0.476, -0.196], [-0.154, 0.467, -0.235], [-0.158, 0.442, -0.233], [-0.158, 0.417, -0.226], [-0.159, 0.389, -0.219], [-0.148, 0.374, -0.191], [-0.133, 0.375, -0.165], [-0.151, 0.449, -0.218], [-0.146, 0.465, -0.215], [-0.138, 0.458, -0.197], [-0.118, 0.460, -0.176], [-0.101, 0.465, -0.164], [-0.078, 0.462, -0.153], [-0.037, 0.463, -0.150], [-0.057, 0.462, -0.150], [-0.145, 0.436, -0.202], [-0.151, 0.421, -0.210], [-0.151, 0.399, -0.204], [-0.145, 0.390, -0.189], [-0.130, 0.394, -0.168], [-0.115, 0.395, -0.151], [-0.090, 0.393, -0.133], [-0.053, 0.392, -0.125], [-0.015, 0.386, -0.127], [-0.020, 0.458, -0.151], [-0.026, 0.439, -0.145], [-0.035, 0.414, -0.135], [-0.040, 0.396, -0.128], [-0.076, 0.398, -0.130], [-0.105, 0.395, -0.141], [-0.139, 0.404, -0.183], [-0.127, 0.408, -0.169], [-0.110, 0.408, -0.152], [-0.086, 0.412, -0.139], [-0.062, 0.415, -0.136], [-0.056, 0.433, -0.141], [-0.049, 0.445, -0.145], [-0.075, 0.448, -0.148], [-0.092, 0.448, -0.154], [-0.112, 0.449, -0.168], [-0.128, 0.445, -0.181], [-0.132, 0.434, -0.183], [-0.135, 0.423, -0.183], [-0.123, 0.427, -0.169], [-0.110, 0.428, -0.159], [-0.102, 0.427, -0.153], [-0.084, 0.431, -0.146], [-0.076, 0.432, -0.144], [-0.114, 0.436, -0.165], [-0.109, 0.466, -0.171], [-0.145, 0.473, -0.217], [-0.016, 0.435, -0.145], [-0.010, 0.452, -0.151], [0.001, 0.459, -0.157], [0.015, 0.458, -0.165], [0.020, 0.454, -0.168], [0.007, 0.438, -0.154], [0.002, 0.418, -0.146], [-0.006, 0.400, -0.137], [-0.019, 0.417, -0.139], [-0.000, 0.386, -0.133], [0.019, 0.370, -0.135], [0.034, 0.365, -0.151], [0.045, 0.358, -0.168], [0.042, 0.351, -0.155], [0.058, 0.336, -0.184], [0.072, 0.325, -0.210], [0.081, 0.321, -0.228], [0.085, 0.317, -0.238], [0.081, 0.345, -0.241], [0.077, 0.400, -0.254], [0.072, 0.430, -0.252], [0.070, 0.444, -0.249], [0.052, 0.453, -0.212], [0.028, 0.465, -0.178], [0.023, 0.433, -0.165], [0.015, 0.407, -0.151], [0.020, 0.380, -0.143], [0.012, 0.392, -0.142], [0.030, 0.384, -0.157], [0.043, 0.372, -0.175], [0.055, 0.359, -0.191], [0.061, 0.349, -0.200], [0.074, 0.345, -0.222], [0.077, 0.368, -0.239], [0.077, 0.384, -0.247], [0.069, 0.393, -0.231], [0.070, 0.408, -0.238], [0.065, 0.431, -0.234], [0.059, 0.432, -0.221], [0.050, 0.441, -0.206], [0.045, 0.455, -0.200], [0.036, 0.450, -0.185], [0.030, 0.434, -0.173], [0.032, 0.414, -0.170], [0.040, 0.394, -0.177], [0.050, 0.385, -0.192], [0.060, 0.372, -0.208], [0.069, 0.377, -0.227], [0.086, 0.329, -0.247], [0.078, 0.335, -0.228], [0.069, 0.360, -0.220], [0.058, 0.397, -0.212], [0.060, 0.419, -0.220], [0.050, 0.423, -0.203], [0.042, 0.429, -0.189], [0.043, 0.413, -0.188], [0.049, 0.406, -0.198], [0.017, 0.421, -0.157], [0.027, 0.399, -0.157], [0.031, 0.403, -0.166]
+      ],
+      "clinical_profile": {
+        "description": "Thick transverse band of deep fascia; prevents bowstringing of anterior tendons.",
+        "pathologies": ["Anterior Ankle Impingement", "Tenosynovitis of Extensor Tendons", "Compartment Syndrome (pressure point)"],
+        "nerve": "N/A (Fascial structure)"
+      }
+    },
+    {
+      "id": "flexor_retinaculum_l",
+      "label": "Left Flexor Retinaculum",
+      "type": "retinaculum",
+      "coordinates": [
+        [-0.159, 0.345, -0.322], [-0.150, 0.332, -0.330], [-0.143, 0.319, -0.338], [-0.138, 0.304, -0.342], [-0.132, 0.293, -0.351], [-0.124, 0.272, -0.359], [-0.119, 0.260, -0.368], [-0.115, 0.243, -0.377], [-0.112, 0.230, -0.387], [-0.110, 0.217, -0.394], [-0.107, 0.201, -0.407], [-0.105, 0.180, -0.419], [-0.100, 0.163, -0.436], [-0.094, 0.143, -0.451], [-0.092, 0.121, -0.458], [-0.094, 0.100, -0.456], [-0.100, 0.090, -0.444], [-0.108, 0.080, -0.427], [-0.113, 0.072, -0.412], [-0.123, 0.086, -0.396], [-0.125, 0.102, -0.388], [-0.128, 0.119, -0.376], [-0.129, 0.135, -0.362], [-0.129, 0.155, -0.344], [-0.129, 0.169, -0.336], [-0.131, 0.186, -0.323], [-0.133, 0.205, -0.315], [-0.137, 0.225, -0.309], [-0.142, 0.236, -0.300], [-0.147, 0.252, -0.296], [-0.151, 0.271, -0.289], [-0.156, 0.293, -0.282], [-0.163, 0.317, -0.274], [-0.163, 0.324, -0.292], [-0.164, 0.334, -0.306], [-0.157, 0.325, -0.313], [-0.158, 0.308, -0.297], [-0.157, 0.314, -0.307], [-0.149, 0.313, -0.324], [-0.154, 0.294, -0.303], [-0.151, 0.301, -0.315], [-0.159, 0.303, -0.277], [-0.149, 0.274, -0.306], [-0.145, 0.285, -0.322], [-0.140, 0.295, -0.335], [-0.136, 0.280, -0.340], [-0.140, 0.266, -0.322], [-0.144, 0.258, -0.308], [-0.138, 0.244, -0.317], [-0.135, 0.254, -0.330], [-0.132, 0.265, -0.342], [-0.126, 0.256, -0.354], [-0.131, 0.243, -0.337], [-0.135, 0.232, -0.319], [-0.131, 0.225, -0.328], [-0.126, 0.230, -0.346], [-0.124, 0.241, -0.358], [-0.118, 0.234, -0.369], [-0.116, 0.219, -0.377], [-0.120, 0.216, -0.362], [-0.124, 0.216, -0.350], [-0.129, 0.208, -0.333], [-0.126, 0.202, -0.340], [-0.125, 0.183, -0.346], [-0.122, 0.195, -0.358], [-0.119, 0.199, -0.370], [-0.112, 0.205, -0.390], [-0.113, 0.191, -0.392], [-0.117, 0.186, -0.379], [-0.123, 0.175, -0.363], [-0.126, 0.168, -0.353], [-0.125, 0.159, -0.365], [-0.117, 0.165, -0.388], [-0.111, 0.177, -0.405], [-0.114, 0.174, -0.396], [-0.122, 0.165, -0.373], [-0.125, 0.147, -0.371], [-0.124, 0.135, -0.381], [-0.123, 0.125, -0.390], [-0.123, 0.111, -0.395], [-0.121, 0.101, -0.405], [-0.116, 0.093, -0.414], [-0.109, 0.103, -0.431], [-0.099, 0.111, -0.449], [-0.103, 0.124, -0.440], [-0.104, 0.145, -0.432], [-0.106, 0.158, -0.424], [-0.110, 0.162, -0.412], [-0.117, 0.156, -0.395], [-0.119, 0.143, -0.393], [-0.118, 0.126, -0.406], [-0.116, 0.113, -0.415], [-0.108, 0.124, -0.430], [-0.111, 0.139, -0.418], [-0.113, 0.147, -0.409], [-0.115, 0.138, -0.409], [-0.106, 0.192, -0.414], [-0.104, 0.172, -0.426], [-0.099, 0.153, -0.439], [-0.128, 0.147, -0.353], [-0.103, 0.102, -0.440], [-0.106, 0.133, -0.433], [-0.110, 0.096, -0.426], [-0.113, 0.114, -0.422], [-0.147, 0.298, -0.322]
+      ],
+      "clinical_profile": {
+        "description": "Fascial band forming the roof of the tarsal tunnel on the medial ankle.",
+        "pathologies": ["Tarsal Tunnel Syndrome", "Posterior Tibial Tendon Dysfunction (PTTD)", "Medial Ankle Impingement"],
+        "nerve": "Tibial Nerve"
+      }
+    }
+  ]
+};
+
+const urls = {
+    left: "https://stuart-mcneill.github.io/3Dfootselection/Leftfoot.glb",
+    right: "https://stuart-mcneill.github.io/feet-selection/RightFoot.glb"
+};
+
+let scene, camera, renderer, controls;
+let raycaster = new THREE.Raycaster();
+let mouse = new THREE.Vector2();
+let currentFoot = "left"; // Set Left as default for database testing
+let footGroup = new THREE.Group();
+let markerGroup = new THREE.Group();
+let isLoaded = false;
+let mode = "rotate"; 
+
+init();
+
+function init() {
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0a0a0c);
+    camera = new THREE.PerspectiveCamera(35, window.innerWidth / window.innerHeight, 0.1, 100);
+    
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    document.body.appendChild(renderer.domElement);
+
+    controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x222222, 3.0));
+    const sun = new THREE.DirectionalLight(0xffffff, 2.0);
+    sun.position.set(5, 5, 5);
+    scene.add(sun);
+
+    scene.add(footGroup);
+    scene.add(markerGroup);
+
+    // Dynamic UI Hook setup
+    document.getElementById('toggle-mode-btn').addEventListener('click', toggleInteractionMode);
+
+    const handleInput = (e) => {
+        if (!isLoaded || mode !== "mark") return;
+        if (e.type === 'touchstart') e.preventDefault();
+
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+        const rect = renderer.domElement.getBoundingClientRect();
+        mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+        mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+        
+        performRaycast();
+    };
+
+    renderer.domElement.addEventListener("mousedown", (e) => { if(!('ontouchstart' in window)) handleInput(e); });
+    renderer.domElement.addEventListener("touchstart", handleInput, { passive: false });
+    
+    window.addEventListener("resize", onResize);
+    loadFoot();
+    animate();
+}
+
+/**
+ * Geometric Nearest Neighbor Distance Calculation Engine
+ */
+function findClosestAnatomy(tapPoint, maxDistanceThreshold = 0.06) {
+    let closestStructure = null;
+    let minDistance = Infinity;
+
+    const db = ANATOMY_TRACER_DATABASE.anatomical_database;
+    
+    for (let i = 0; i < db.length; i++) {
+        const structure = db[i];
+        
+        for (let j = 0; j < structure.coordinates.length; j++) {
+            const coord = structure.coordinates[j];
+            
+            // Standard Euclidean Distance Math Formula
+            const distance = Math.sqrt(
+                Math.pow(tapPoint.x - coord[0], 2) +
+                Math.pow(tapPoint.y - coord[1], 2) +
+                Math.pow(tapPoint.z - coord[2], 2)
+            );
+
+            if (distance < minDistance) {
+                minDistance = distance;
+                closestStructure = structure;
+            }
+        }
+    }
+
+    if (minDistance <= maxDistanceThreshold) {
+        return { structure: closestStructure, distance: minDistance };
+    }
+    return null;
+}
+
+function performRaycast() {
+    raycaster.setFromCamera(mouse, camera);
+    const hits = raycaster.intersectObjects(footGroup.children, true);
+    
+    if (hits.length > 0) {
+        const pos = hits[0].point;
+
+        // Render point marker on mesh canvas surface
+        const dot = new THREE.Mesh(
+            new THREE.SphereGeometry(0.008), 
+            new THREE.MeshBasicMaterial({ color: 0x00D4FF })
+        );
+        dot.position.copy(pos);
+        markerGroup.add(dot);
+
+        // Update UI HUD text fields with raw vector coordinates
+        document.getElementById('vector-output').innerText = 
+            `X: ${pos.x.toFixed(4)}, Y: ${pos.y.toFixed(4)}, Z: ${pos.z.toFixed(4)}`;
+
+        // Execute Nearest Neighbor Match Algorithm
+        const match = findClosestAnatomy(pos, 0.06);
+
+        if (match) {
+            document.getElementById('target-structure').innerText = match.structure.label;
+            document.getElementById('target-type').innerText = match.structure.type;
+            document.getElementById('proximity-output').innerText = `${(match.distance * 100).toFixed(2)} units`;
+            
+            // Update pathology rendering listing
+            const listContainer = document.getElementById('pathology-list');
+            listContainer.innerHTML = "";
+            match.structure.clinical_profile.pathologies.forEach(path => {
+                const li = document.createElement('li');
+                li.innerText = path;
+                listContainer.appendChild(li);
+            });
+        } else {
+            document.getElementById('target-structure').innerText = "Nonspecific Surface Layer";
+            document.getElementById('target-type').innerText = "Surface";
+            document.getElementById('proximity-output').innerText = "Outside threshold range";
+            document.getElementById('pathology-list').innerHTML = "<li>No deep structural matches found near this tap zone.</li>";
+        }
+        
+        // Pass payload updates seamlessly back if connected inside Expo native application environments
+        if (window.ReactNativeWebView) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+                count: markerGroup.children.length,
+                region: match ? match.structure.label : "External Surface",
+                lastCoordinates: [pos.x, pos.y, pos.z]
+            }));
+        }
+    }
+}
+
+function loadFoot() {
+    isLoaded = false;
+    footGroup.clear();
+    markerGroup.clear();
+
+    new GLTFLoader().load(urls[currentFoot], (gltf) => {
+        const model = gltf.scene;
+        model.traverse(c => { 
+            if(c.isMesh) {
+                c.material = new THREE.MeshStandardMaterial({ 
+                    color: 0x222226, roughness: 0.5, metalness: 0.1 
+                }); 
+            }
+        });
+        
+        const box = new THREE.Box3().setFromObject(model);
+        const size = new THREE.Vector3();
+        box.getSize(size);
+        const center = new THREE.Vector3();
+        box.getCenter(center);
+
+        model.position.x = -center.x;
+        model.position.y = -box.min.y; 
+        model.position.z = -center.z;
+
+        const maxDim = Math.max(size.x, size.y, size.z);
+        const scaleFactor = 1.0 / maxDim;
+        model.scale.setScalar(scaleFactor);
+        model.position.multiplyScalar(scaleFactor);
+
+        footGroup.add(model);
+        camera.position.set(0, 1.2, 2.5);
+        controls.target.set(0, 0.4, 0);
+        isLoaded = true;
+    });
+}
+
+function toggleInteractionMode() {
+    if (mode === "rotate") {
+        mode = "mark";
+        controls.enabled = false;
+        document.getElementById('mode-indicator').innerText = "Mode: Mark Spot";
+        document.getElementById('toggle-mode-btn').innerText = "SWITCH TO VIEW MODE";
+        document.getElementById('toggle-mode-btn').style.background = "#ff4d4d";
+    } else {
+        mode = "rotate";
+        controls.enabled = true;
+        document.getElementById('mode-indicator').innerText = "Mode: Rotate View";
+        document.getElementById('toggle-mode-btn').innerText = "SWITCH TO MARK MODE";
+        document.getElementById('toggle-mode-btn').style.background = "#00D4FF";
+    }
+}
+
+// --- EXPO EXTERNAL CONTROLLER OVERRIDES ---
+window.handleMobileCommand = (json) => {
+    const data = JSON.parse(json);
+    if (data.action === 'SELECT') { currentFoot = data.side; loadFoot(); }
+    if (data.action === 'SET_MODE') {
+        mode = data.mode;
+        controls.enabled = (mode === "rotate");
+        document.getElementById('mode-indicator').innerText = mode === "rotate" ? "Mode: Rotate View" : "Mode: Mark Spot";
+    }
+    if (data.action === 'UNDO') {
+        if (markerGroup.children.length > 0) {
+            markerGroup.remove(markerGroup.children[markerGroup.children.length - 1]);
+        }
+    }
+    if (data.action === 'CLEAR') {
+        markerGroup.clear();
+    }
+};
+
+function onResize() {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+function animate() {
+    requestAnimationFrame(animate);
+    controls.update();
+    renderer.render(scene, camera);
+}
+</script>
+</body>
+</html>
