@@ -3,50 +3,57 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>3D Foot Analysis V4 - Nearest Neighbor Sandbox</title>
+    <title>3D Foot Analysis V4 - Unified Diagnostics Sandbox</title>
     <style>
         body { margin: 0; overflow: hidden; background: #0a0a0c; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; touch-action: none; }
         #ui-layer { display: none !important; }
         
-        /* Dynamic Diagnostic HUD overlay */
+        /* Premium Interactive Diagnostic HUD overlay */
         #diagnostic-hud {
             position: absolute;
             top: 20px;
             left: 20px;
-            background: rgba(20, 20, 24, 0.9);
+            background: rgba(20, 20, 24, 0.92);
             border: 1px solid rgba(0, 212, 255, 0.3);
             border-radius: 16px;
             padding: 16px;
-            width: 310px;
+            width: 320px;
             z-index: 100;
             color: #fff;
             pointer-events: auto;
             box-shadow: 0 10px 30px rgba(0,0,0,0.6);
             backdrop-filter: blur(10px);
         }
-        .data-label { font-size: 11px; font-weight: 600; color: #888; text-transform: uppercase; margin: 10px 0 2px 0; letter-spacing: 0.5px; }
+        .data-label { font-size: 11px; font-weight: 600; color: #888; text-transform: uppercase; margin: 12px 0 2px 0; letter-spacing: 0.5px; }
         .data-value { font-size: 13px; color: #34C759; background: rgba(255,255,255,0.04); padding: 6px 10px; border-radius: 8px; font-family: monospace; overflow-x: auto; margin-bottom: 6px; border: 1px solid rgba(255,255,255,0.02); }
         #pathology-list { font-size: 13px; color: #ff4d4d; padding-left: 18px; margin: 4px 0 0 0; line-height: 18px; }
         #mode-indicator { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); padding: 8px 18px; border-radius: 20px; color: #fff; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; z-index: 100; pointer-events: none; }
         .mode-btn { background: #00D4FF; border: none; color: #000; font-weight: 700; padding: 10px 12px; border-radius: 8px; cursor: pointer; font-size: 12px; width: 100%; margin-top: 14px; display: block; text-align: center; }
+        #db-status { font-size: 11px; color: #ff9500; font-weight: bold; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.3px; }
+        .description-text { font-size: 13px; color: #d1d1d6; line-height: 20px; margin-top: 4px; }
     </style>
 </head>
 <body>
 
 <div id="diagnostic-hud">
-    <p class="data-label" style="margin-top:0;">Target Selection Match</p>
+    <div id="db-status">Connecting To Soft Tissue Engine...</div>
+    
+    <p class="data-label" style="margin-top:0;">Identified Anatomy</p>
     <div id="target-structure" style="font-size:16px; font-weight:700; color:#fff; margin-bottom:2px;">No Selection Made</div>
     <div id="target-type" style="font-size:10px; font-weight:700; color:#00D4FF; text-transform:uppercase; letter-spacing:0.5px;">SYSTEM READY</div>
     
+    <p class="data-label">Anatomical Context Summary</p>
+    <div id="target-description" class="description-text">Tap anywhere on the model to scan underlying mechanical tissue pathways.</div>
+
     <p class="data-label">Raw Click Vector Coordinate</p>
     <div id="vector-output" class="data-value" style="color: #e5e5ea;">X: 0.000, Y: 0.000, Z: 0.000</div>
     
     <p class="data-label">Nearest Proximity Margin</p>
     <div id="proximity-output" class="data-value">0.00 units</div>
 
-    <p class="data-label">Simulated Joint Pathologies</p>
+    <p class="data-label">Database Mapped Pathologies</p>
     <ul id="pathology-list">
-        <li>Tap anywhere on the model to test the math</li>
+        <li>Select a feature point in 'Mark' mode to run ruleset logic.</li>
     </ul>
 
     <button id="toggle-mode-btn" class="mode-btn">SWITCH TO MARK MODE</button>
@@ -68,7 +75,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-// Fully populated joint and bone coordinate database matrix
+// --- DATABASE 1: Joint & Structural Placement Landmarks ---
 const PRESET_REGIONS = [
   // --- LEFT FOOT ---
   { name: "Left foot - Dorsal Hallux Toenail", pos: [-0.11115, 0.098, 0.465], rot: [0, 0.01, 0], scale: [0.05, 0.015, 0.05] },
@@ -138,7 +145,7 @@ const PRESET_REGIONS = [
   { name: "Left foot - Plantar 5th Proximal Interphalangeal joint", pos: [0.15532, 0.04729, 0.30191], rot: [0.30274, 0.02221, -0.07564], scale: [0.03099, 0.04631, 0.00751] },
   { name: "Left foot - 5th Dorsal Toe", pos: [0.15913, 0.07617, 0.30178], rot: [0.27989, 0.05807, -0.12434], scale: [0.03655, 0.01103, 0.07757] },
   { name: "Left foot - 5th Plantar Toe", pos: [0.14444, 0.04506, 0.31317], rot: [0.29406, 0.00005, 0.00027], scale: [0.03439, 0.01723, 0.06627] },
-  { name: "Left foot - 5th Medial Toe", pos: [0.13765, 0.05807, 0.31499], rot: [0.15484, -0.08076, -0.02360], scale: [0.01672, 0.02617, 0.06402] },
+  { name: "Left foot - 5th Medial Toe", pos: [0.13765, 0.05807, 0.31499], rot: [0.15484, 0.08076, -0.02360], scale: [0.01672, 0.02617, 0.06402] },
   { name: "Left foot - 5th Lateral Toe", pos: [0.16575, 0.05852, 0.31868], rot: [0.26492, -0.06765, -0.18791], scale: [0.01318, 0.02775, 0.08480] },
   { name: "Left foot - Plantar 4th Metatarsophalangeal joint", pos: [0.09358, 0.02514, 0.27015], rot: [-0.01038, 0.07019, 0.04787], scale: [0.05265, 0.06951, 0.07306] },
   { name: "Left foot - Dorsal 4th Metatarsophalangeal joint", pos: [0.10658, 0.13172, 0.25953], rot: [0.31958, -0.01414, -0.01277], scale: [0.05724, 0.10000, 0.08049] },
@@ -246,16 +253,16 @@ const PRESET_REGIONS = [
   { name: "Right foot - 5th Toe Apex", pos: [-0.14734, 0.03651, 0.35117], rot: [0.95715, -0.02880, 0.12951], scale: [0.01931, 0.01921, 0.00342] },
   { name: "Right foot - 5th Toenail", pos: [-0.15017, 0.04966, 0.34246], rot: [2.06427, 0.02082, -1.54951], scale: [0.02826, 0.02915, 0.00717] },
   { name: "Right foot - Dorsal 5th Distal Interphalangeal joint", pos: [-0.15283, 0.07293, 0.34000], rot: [0.35443, 0.05178, 0.06247], scale: [0.02608, 0.03114, 0.00835] },
-  { name: "Right foot - Dorsal 5th Proximal Interphalangeal joint", pos: [-0.15502, 0.07566, 0.32051], rot: [0.36554, 0.02790, 0.04379], scale: [0.03082, 0.04780, 0.00763] },
+  { name: "Right foot - Dorsal 5th Proximal Interphalangeal joint", pos: [-0.15502, 0.07566, 0.32051], rot: [0.36554, -0.02790, 0.04379], scale: [0.03082, 0.04780, 0.00763] },
   { name: "Right foot - Plantar 5th Distal Interphalangeal joint", pos: [-0.14818, 0.03843, 0.33128], rot: [0.27723, -0.03712, 0.12412], scale: [0.03019, 0.04120, 0.00807] },
   { name: "Right foot - Plantar 5th Proximal Interphalangeal joint", pos: [-0.15532, 0.04729, 0.30191], rot: [0.30274, -0.02221, 0.07564], scale: [0.03099, 0.04631, 0.00751] },
   { name: "Right foot - 5th Dorsal Toe", pos: [-0.15913, 0.07617, 0.30178], rot: [0.27989, 0.05807, 0.12434], scale: [0.03655, 0.01103, 0.07757] },
   { name: "Right foot - 5th Plantar Toe", pos: [-0.14444, 0.04506, 0.31317], rot: [0.29406, -0.00005, -0.00027], scale: [0.03439, 0.01723, 0.06627] },
-  { name: "Right foot - 5th Medial Toe", pos: [-0.13765, 0.05807, 0.31499], rot: [0.15484, -0.08076, 0.02360], scale: [0.01672, 0.02617, 0.06402] },
+  { name: "Right foot - 5th Medial Toe", pos: [-0.13765, 0.05807, 0.31499], rot: [0.15484, 0.08076, 0.02360], scale: [0.01672, 0.02617, 0.06402] },
   { name: "Right foot - 5th Lateral Toe", pos: [-0.16575, 0.05852, 0.31868], rot: [0.26492, 0.06765, 0.18791], scale: [0.01318, 0.02775, 0.08480] },
   { name: "Right foot - Plantar 4th Metatarsophalangeal joint", pos: [-0.09358, 0.02514, 0.27015], rot: [-0.01038, -0.07019, -0.04787], scale: [0.05265, 0.06951, 0.07306] },
   { name: "Right foot - Dorsal 4th Metatarsophalangeal joint", pos: [-0.10658, 0.13172, 0.25953], rot: [0.31958, 0.01414, 0.01277], scale: [0.05724, 0.10000, 0.08049] },
-  { name: "Right foot - Dorsal 5th Metatarsophalangeal joint", pos: [-0.16098, 0.12258, 0.20810], rot: [0.22476, 0.09131, 0.07091], scale: [0.06064, 0.10000, 0.12244] },
+  { name: "Right foot - Dorsal 5th Metatarsophalangeal joint", pos: [-0.16098, 0.12258, 0.20810], rot: [0.22476, -0.09131, 0.07091], scale: [0.06064, 0.10000, 0.12244] },
   { name: "Right foot - Plantar 5th Metatarsophalangeal joint", pos: [-0.15671, 0.02905, 0.20695], rot: [-0.01479, 0.07405, 0.15925], scale: [0.05707, 0.05933, 0.15656] },
   { name: "Right foot - Lateral 5th Metatarsophalangeal joint", pos: [-0.18809, 0.06346, 0.19148], rot: [0.05798, -0.04696, 0.17125], scale: [0.05131, 0.04416, 0.10642] },
   { name: "Right foot - Dorsal 4th Metatarsal", pos: [-0.09982, 0.14247, 0.11031], rot: [0.36551, 0.02976, 0.06092], scale: [0.04942, 0.05673, 0.23769] },
@@ -310,6 +317,10 @@ let footGroup = new THREE.Group();
 let markerGroup = new THREE.Group();
 let isLoaded = false;
 let mode = "rotate"; 
+let softTissueDatabase = null;
+
+// Dynamic fetch URL link pointing straight to your hosted complete soft-tissue tracker JSON
+const REMOTE_JSON_PATH = "https://stuart-mcneill.github.io/feet-selectionv8/anatomytracer.json";
 
 init();
 
@@ -355,39 +366,87 @@ function init() {
     renderer.domElement.addEventListener("touchstart", handleInput, { passive: false });
     
     window.addEventListener("resize", onResize);
+    
+    // Core Engine Sequence Launchers
+    loadSoftTissueDatabase();
     loadFoot();
     animate();
 }
 
 /**
- * Geometric Nearest Neighbor Distance Array Vector Engine
- * Evaluates distances against internal layout vertices
+ * Downloads and initializes your soft tissue tracking file directly from GitHub Pages
  */
-function findClosestAnatomy(tapPoint, maxDistanceThreshold = 0.18) {
-    let closestStructure = null;
-    let minDistance = Infinity;
+function loadSoftTissueDatabase() {
+    fetch(REMOTE_JSON_PATH)
+        .then(res => {
+            if (!res.ok) throw new Error("Could not reach remote json pipeline file");
+            return res.json();
+        })
+        .then(data => {
+            softTissueDatabase = data;
+            document.getElementById('db-status').innerText = "ENGINE UNIFIED: ALL COMPONENT DATASETS LINKED";
+            document.getElementById('db-status').style.color = "#34c759";
+        })
+        .catch(err => {
+            console.error("Unified Engine Error loading cloud json tracker data file:", err);
+            document.getElementById('db-status').innerText = "SOFT TISSUE DATABASE DISCONNECTED - FALLBACK RUNNING";
+            document.getElementById('db-status').style.color = "#ff9500";
+        });
+}
 
-    // Filter points to matching active foot side
+/**
+ * Unified Proximity Mapping Calculator Engine (Nearest Neighbor)
+ * Cross-references click parameters across both layers simultaneously
+ */
+function findUnifiedNearestMatch(tapPoint) {
+    let closestItem = null;
+    let minDistance = Infinity;
+    let matchSourceType = "surface"; // "joint" or "soft_tissue"
+
+    // --- CHECK LAYER 1: Joint Preset Bounding Boxes ---
     const activeSidePrefix = currentFoot === "left" ? "Left foot" : "Right foot";
-    
     PRESET_REGIONS.forEach(region => {
-        if (!region.name.startsWith(activeSidePrefix)) return;
+        if (!region.name.startsWith(activeSidePrefix) && !region.name.startsWith(currentFoot === "left" ? "Left" : "Right")) return;
         
-        // Euclidean Math Core Equation
-        const distance = Math.sqrt(
+        const d = Math.sqrt(
             Math.pow(tapPoint.x - region.pos[0], 2) +
             Math.pow(tapPoint.y - region.pos[1], 2) +
             Math.pow(tapPoint.z - region.pos[2], 2)
         );
 
-        if (distance < minDistance) {
-            minDistance = distance;
-            closestStructure = region;
+        if (d < minDistance) {
+            minDistance = d;
+            closestItem = region;
+            matchSourceType = "joint";
         }
     });
 
-    if (minDistance <= maxDistanceThreshold) {
-        return { structure: closestStructure, distance: minDistance };
+    // --- CHECK LAYER 2: Soft Tissue Paths (anatomytracer.json) ---
+    if (softTissueDatabase && softTissueDatabase.anatomical_database) {
+        softTissueDatabase.anatomical_database.forEach(structure => {
+            if (!structure.coordinates) return;
+            
+            structure.coordinates.forEach(coord => {
+                const d = Math.sqrt(
+                    Math.pow(tapPoint.x - coord[0], 2) +
+                    Math.pow(tapPoint.y - coord[1], 2) +
+                    Math.pow(tapPoint.z - coord[2], 2)
+                );
+
+                if (d < minDistance) {
+                    minDistance = d;
+                    closestItem = structure;
+                    matchSourceType = "soft_tissue";
+                }
+            });
+        });
+    }
+
+    // Normalized clinical catchment bounding range (Adjust if bubbles intersect too wide)
+    const activeThreshold = 0.065; 
+
+    if (minDistance <= activeThreshold) {
+        return { data: closestItem, distance: minDistance, sourceType: matchSourceType };
     }
     return null;
 }
@@ -406,41 +465,57 @@ function performRaycast() {
         dot.position.copy(pos);
         markerGroup.add(dot);
 
-        // Print raw coordinates to the visual testing HUD
         document.getElementById('vector-output').innerText = 
             `X: ${pos.x.toFixed(4)}, Y: ${pos.y.toFixed(4)}, Z: ${pos.z.toFixed(4)}`;
 
-        // Execute Nearest Neighbor Match Check
-        const match = findClosestAnatomy(pos, 0.18);
+        // Execute Unified Lookup
+        const match = findUnifiedNearestMatch(pos);
+        const listContainer = document.getElementById('pathology-list');
+        listContainer.innerHTML = "";
 
         if (match) {
-            const cleanName = match.structure.name.replace(/Left foot - |Right foot - /g, "");
-            document.getElementById('target-structure').innerText = cleanName;
-            document.getElementById('target-type').innerText = currentFoot.toUpperCase() + " FOOT RECOVERY LANDMARK";
             document.getElementById('proximity-output').innerText = `${(match.distance * 100).toFixed(2)} units`;
             
-            // Populate sandbox simulation diagnostic data profiles
-            const listContainer = document.getElementById('pathology-list');
-            listContainer.innerHTML = "";
-            
-            const item1 = document.createElement('li');
-            item1.innerText = "Focal Capsular Inflammation";
-            listContainer.appendChild(item1);
-
-            const item2 = document.createElement('li');
-            item2.innerText = "Mechanical Load Imbalance Overload";
-            listContainer.appendChild(item2);
+            if (match.sourceType === "soft_tissue") {
+                // Formatting handler optimized for your custom JSON dataset objects
+                const item = match.data;
+                document.getElementById('target-structure').innerText = item.label;
+                document.getElementById('target-type').innerText = `${item.type.replace(/_/g, ' ')}`;
+                
+                const profile = item.clinical_profile || item.anatomy_profile || item.functional_summary || {};
+                document.getElementById('target-description').innerText = profile.description || profile.primary_action || "Deep soft-tissue component pathway layer.";
+                
+                const pathologies = profile.pathologies || profile.clinical_relevance || ["Focal soft-tissue constraint strain"];
+                pathologies.forEach(path => {
+                    const li = document.createElement('li');
+                    li.innerText = path;
+                    listContainer.appendChild(li);
+                });
+            } else {
+                // Formatting handler optimized for your static Joint landmark array values
+                const item = match.data;
+                const cleanName = item.name.replace(/Left foot - |Right foot - /g, "");
+                document.getElementById('target-structure').innerText = cleanName;
+                document.getElementById('target-type').innerText = "Joint / Skeletal Anchor Point";
+                document.getElementById('target-description').innerText = "Skeletal articulation segment tracked inside the physical footprint coordinates map.";
+                
+                // Static sandbox diagnostics placeholder fallback for the joints parameters
+                const li1 = document.createElement('li'); li1.innerText = "Capsular Strain / Joint Contusion"; listContainer.appendChild(li1);
+                const li2 = document.createElement('li'); li2.innerText = "Acute Mechanical Stress"; listContainer.appendChild(li2);
+            }
         } else {
             document.getElementById('target-structure').innerText = "Nonspecific Surface Area";
             document.getElementById('target-type').innerText = "EXTERNAL EPIDERMIS";
+            document.getElementById('target-description').innerText = "Discomfort localized on the superficial skin level away from major structural connections.";
             document.getElementById('proximity-output').innerText = "Outside point threshold zones";
-            document.getElementById('pathology-list').innerHTML = "<li>No local structural anchors matched near this tap point.</li>";
+            document.getElementById('pathology-list').innerHTML = "<li>No local deep structural anchors matched near this tap point.</li>";
         }
         
+        // Bubbles stats up seamlessly if accessed via an inline mobile WebView component frame layer
         if (window.ReactNativeWebView) {
             window.ReactNativeWebView.postMessage(JSON.stringify({
                 count: markerGroup.children.length,
-                region: match ? match.structure.name.replace(/Left foot - |Right foot - /g, "") : "External Surface",
+                region: match ? (match.sourceType === "soft_tissue" ? match.data.label : match.data.name.replace(/Left foot - |Right foot - /g, "")) : "External Surface",
                 lastCoordinates: [pos.x, pos.y, pos.z]
             }));
         }
